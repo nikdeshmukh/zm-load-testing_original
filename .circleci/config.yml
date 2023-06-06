@@ -2,22 +2,51 @@ version: 2.1
 jobs:
   build:
     docker:
-      - image: ubuntu:20.04
+      - image: circleci/openjdk:8-jdk
 
     steps:
       - checkout
 
-      - add_ssh_keys:
-          fingerprints: b8:20:1c:84:9e:98:73:4b:ef:66:9d:30:c9:01:55:e0
-
-      # Run shell script on remote server
+      # Install SSH client
       - run:
-          name: Run sudo
+          name: Install SSH client
+          command: sudo apt-get update && sudo apt-get install -y openssh-client
+
+      # Set up SSH key
+      - add_ssh_keys:
+          fingerprints:
+            - "18:3d:67:c0:96:a6:b9:46:0e:3d:27:16:e9:93:81:ff"
+
+      # Connect to remote server and run JMeter test
+      - run:
+          name: Run JMeter test on remote server
           command: 
-            cd /home/opc
-            
+            ssh -o StrictHostKeyChecking=no root@132.145.159.252 "cd /home/opc/zm-load-testing; ant generic-zsoap"
+
+    # Create the results directory
+      - run:
+          name: Create Results Directory
+          command: 
+            ssh -o StrictHostKeyChecking=no root@132.145.159.252
+            mkdir -p /tmp/results
+            chmod 600 /tmp/results
+
+      # Copy test artifacts to the results directory
+      - run:
+          name: Copy Test Artifacts
+          command: |
+            ssh -o StrictHostKeyChecking=no root@132.145.159.252
+            cp /home/opc/zm-load-testing/logs/generic-zsoap-requests.csv /tmp/results
+            cp /home/opc/zm-load-testing/logs/generic-zsoap-*.log /tmp/results
+            cp /home/opc/zm-load-testing/generic-zsoap.out /tmp/results
+      
+      # Upload test artifacts
+      - store_artifacts:
+          path: results
+          
+
 workflows:
   version: 2
-  build:
+  build-and-deploy:
     jobs:
       - build
